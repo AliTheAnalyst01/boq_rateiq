@@ -44,6 +44,7 @@ from .models import (
 )
 from .postgres_store import cross_project_rates, rate_stats
 from .searcher import BOQSearcher
+from .circuit_breaker import CircuitOpenError, get_circuit
 
 logger = logging.getLogger(__name__)
 
@@ -553,16 +554,19 @@ class RateIQAgent:
                Without this node, the system would quote 2021 rates in 2025.
         READS: state["search_keywords"], state["unit_norm"], state["work_category"]
         WRITES: state["market_rate"]
-        EXIT:  On failure → state["market_rate"]=None; gap_node handles gracefully.
+        EXIT:  CircuitOpenError → market_rate=None, gap_node uses historical only.
+               On other failure → state["market_rate"]=None; gap_node handles gracefully.
         MODEL: ANTHROPIC_MODEL (Sonnet) via market_search — unit conversion reasoning.
         """
+        cb = get_circuit("market_search")
         try:
             keywords = state.get("search_keywords") or state.get("description", "")
             unit = state.get("unit_norm") or "unit"
             category = state.get("work_category") or "other"
 
-            market: MarketRate = _market_search_module.search_market_rate(
-                keywords, unit, category
+            market: MarketRate = cb.call(
+                _market_search_module.search_market_rate,
+                keywords, unit, category,
             )
             state["market_rate"] = _dataclass_to_dict(market)
 
@@ -571,6 +575,13 @@ class RateIQAgent:
                 market.contractor_rate,
                 market.confidence,
             )
+
+        except CircuitOpenError as exc:
+            logger.warning("market_node: circuit OPEN, skipping market search: %s", exc)
+            state["market_rate"] = None
+            errors = state.get("errors") or []
+            errors.append(f"market_node: circuit_open: {exc}")
+            state["errors"] = errors
 
         except Exception as exc:
             logger.error("_market_node failed: %s", exc)
