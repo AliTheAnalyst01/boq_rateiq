@@ -50,13 +50,18 @@ def health():
     return {"status": "ok", "agent_ready": agent is not None, "version": "1.0.0"}
 
 
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024   # 10 MB
+MAX_EMPTY_ROWS = 50
+
+
 @app.post("/fill-boq")
 async def fill_boq(file: UploadFile = File(...)):
     """
     INPUT:  Excel file (.xlsx) uploaded via multipart form
             File must have columns: DESCRIPTION, QTY, UNIT
             RATE column can be empty — agent will fill it
-    
+            Max file size: 10 MB. Max empty-rate rows: 50.
+
     OUTPUT: Excel file (.xlsx) download with added columns:
             SUGGESTED_RATE  — PKR number recommended by agent
             CONFIDENCE      — high / medium / low
@@ -66,10 +71,10 @@ async def fill_boq(file: UploadFile = File(...)):
             MARKET_RATE     — current market rate if found
             GAP_PCT         — % difference hist vs market
             GAP_VERDICT     — CONFIRMED / MINOR_GAP / MAJOR_GAP
-    
+
     EXAMPLE:
-        curl -X POST http://localhost:8000/fill-boq \
-             -F "file=@test_boq_input.xlsx" \
+        curl -X POST http://localhost:8000/fill-boq \\
+             -F "file=@test_boq_input.xlsx" \\
              --output filled_boq.xlsx
     """
     if agent is None:
@@ -78,12 +83,42 @@ async def fill_boq(file: UploadFile = File(...)):
     if not file.filename.endswith((".xlsx", ".xls")):
         raise HTTPException(400, "Only .xlsx or .xls files accepted.")
 
+    content = await file.read()
+
+    # Guard 1: file size
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            413,
+            f"File too large: {len(content) / 1024 / 1024:.1f} MB. Maximum is 10 MB.",
+        )
+
     tmp_input = Path(tempfile.mktemp(suffix=".xlsx"))
     tmp_output = Path(tempfile.mktemp(suffix=".xlsx"))
 
     try:
-        content = await file.read()
         tmp_input.write_bytes(content)
+
+        # Guard 2: empty-row count — parse first, then count before running agent
+        import pandas as pd
+        try:
+            preview_df = pd.read_excel(tmp_input, nrows=200)
+            # Find RATE column (case-insensitive)
+            rate_col = next(
+                (c for c in preview_df.columns if str(c).strip().lower() in ("rate", "rates", "unit rate", "unit price")),
+                None,
+            )
+            if rate_col:
+                empty_count = int(preview_df[rate_col].isna().sum() + (preview_df[rate_col] == 0).sum())
+                if empty_count > MAX_EMPTY_ROWS:
+                    raise HTTPException(
+                        422,
+                        f"File has {empty_count} empty-rate rows. Maximum is {MAX_EMPTY_ROWS}. "
+                        "Split the BOQ into smaller batches.",
+                    )
+        except HTTPException:
+            raise
+        except Exception:
+            pass  # If preview fails, let the main pipeline handle it
 
         result = process_boq_file(
             input_path=tmp_input, output_path=tmp_output, agent=agent
