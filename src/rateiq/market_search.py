@@ -21,6 +21,7 @@ from openai import OpenAI
 from tavily import TavilyClient
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from . import cache as _cache_module
 from .config import (
     ANTHROPIC_API_KEY,
     OPENAI_API_KEY,
@@ -500,20 +501,29 @@ def search_market_rate(
     OUTPUT: MarketRate with contractor_rate, source name/URL, confidence.
             Returns null-rate MarketRate if no market data found after 3 query attempts.
 
-    EXAMPLE:
-        >>> search_market_rate("brick wall 4.5 inch", "sft", "civil_id")
-        MarketRate(contractor_rate=480.0, rate_type="material_only",
-                   source_name="Niazi Bricks", confidence="medium")
+    Cache check order:
+      1. In-memory batch cache (_market_cache) — fastest, cleared per batch
+      2. Redis cross-session cache — persists 7 days across restarts
+      3. Tavily web search — 3 attempts with fallback queries
     """
     key = _cache_key(keywords, unit, category)
+
+    # Level 1: in-memory batch cache
     if key in _market_cache:
-        logger.info("Market cache hit: '%s'", key)
+        logger.info("Market cache hit (in-memory): '%s'", key)
         return _market_cache[key]
 
-    # Attempt 1: targeted query with site restrictions
+    # Level 2: Redis cross-session cache
+    redis_result = _cache_module.get_market_rate(key)
+    if redis_result is not None:
+        _market_cache[key] = redis_result  # also warm in-memory cache
+        return redis_result
+
+    # Level 3: Tavily search — attempt 1
     result = _run_tavily_and_extract(build_query(keywords, unit, category), keywords, unit, category)
     if result.contractor_rate is not None:
         _market_cache[key] = result
+        _cache_module.set_market_rate(key, result)
         return result
 
     # Attempt 2: broad query without site restrictions
@@ -521,6 +531,7 @@ def search_market_rate(
     result = _run_tavily_and_extract(query2, keywords, unit, category)
     if result.contractor_rate is not None:
         _market_cache[key] = result
+        _cache_module.set_market_rate(key, result)
         return result
 
     # Attempt 3: community/forum sources as last resort
@@ -530,8 +541,9 @@ def search_market_rate(
     )
     result = _run_tavily_and_extract(query3, keywords, unit, category)
 
-    # NOTE: Cache even null results to avoid re-querying categories with no web data
+    # Cache even null results to avoid re-querying categories with no web data
     _market_cache[key] = result
+    _cache_module.set_market_rate(key, result)
     return result
 
 
