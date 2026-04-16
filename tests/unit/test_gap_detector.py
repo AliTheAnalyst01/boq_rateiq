@@ -4,7 +4,6 @@ No DB, no LLM, no Qdrant — all functions tested in isolation.
 """
 
 import pytest
-from unittest.mock import MagicMock, patch
 
 from rateiq.gap_detector import compute_gap, suggest_rate, _aggregate_from_search
 from rateiq.models import GapAnalysis, SearchResult, BOQChunk

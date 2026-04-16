@@ -1,6 +1,5 @@
 """Unit tests for parser.normalize_unit, parser.clean_rate, parser.find_header_row."""
 
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -23,6 +22,11 @@ class TestNormalizeUnit:
     def test_ls_variants(self):
         for raw in ["ls", "l.s", "lump sum", "lumpsum", "l/s"]:
             assert normalize_unit(raw) == "ls", f"Failed for {raw!r}"
+
+    def test_unknown_returns_cleaned_string(self):
+        # Unknown units are returned as-is (not coerced to "unit")
+        result = normalize_unit("truck")
+        assert result == "truck"
 
     def test_empty_returns_unit(self):
         assert normalize_unit("") == "unit"
@@ -61,6 +65,9 @@ class TestCleanRate:
 
     def test_zero_returns_none(self):
         assert clean_rate(0) is None
+
+    def test_negative_returns_none(self):
+        assert clean_rate(-100) is None
 
     def test_dash_returns_none(self):
         assert clean_rate("-") is None

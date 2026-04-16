@@ -1,6 +1,5 @@
 """Unit tests for validators.validate_rate and validators.bounds_hint."""
 
-import pytest
 from rateiq.validators import validate_rate, bounds_hint
 
 
