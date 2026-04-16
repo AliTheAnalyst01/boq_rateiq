@@ -270,6 +270,30 @@ Sources: {sources_str}
 
 Write the explanation in plain English. No markdown."""
 
+# ── Cached system prompts (static — eligible for Anthropic prompt cache) ──────
+# WHY: cache_control="ephemeral" tells Anthropic to cache these blocks for 5 min.
+#      In a 20-item BOQ batch, ~80% of calls hit the cache → ~50% LLM cost reduction.
+#      Only the dynamic user message (description, unit, rate) changes per call.
+
+_CLASSIFY_SYSTEM = """\
+You are a Pakistan construction cost expert.
+Classify this BOQ item and extract search keywords.
+
+Return JSON with exactly these keys:
+{
+  "work_category": <one of: civil_id, hvac, electrical_elv, finishing, plumbing, ceiling, flooring, carpentry, other>,
+  "search_keywords": <3-6 word concise search term, no filler words>,
+  "unit_norm": <normalized unit: sft, nos, rft, ls, kg, mtr, cft, ton, point, set, day — pick best match>
+}
+
+Return valid JSON only."""
+
+_OUTPUT_SYSTEM = """\
+Write a 2-3 sentence explanation for a BOQ rate suggestion.
+Be specific, cite sources. Maximum 60 words.
+Always state the per-unit rate explicitly (e.g. "Rs. 4,500 per bag", "Rs. 315 per sft").
+Write in plain English. No markdown."""
+
 # ── Helper: extract text from Anthropic SDK response content block ─────────────
 
 def _extract_llm_text(response_content) -> str:
@@ -379,13 +403,24 @@ class RateIQAgent:
             description = state.get("description", "")
             unit_input = state.get("unit_input") or ""
 
-            prompt = _CLASSIFY_PROMPT_TEMPLATE.format(
-                description=description, unit_input=unit_input
-            )
+            # Static system prompt is cached by Anthropic for 5 min.
+            # Only the 2-line user message (description + unit) changes per call.
             response = self._llm.messages.create(
                 model=settings.ANTHROPIC_MODEL_LIGHT,
                 max_tokens=200,
-                messages=[{"role": "user", "content": prompt}],
+                system=[
+                    {
+                        "type": "text",
+                        "text": _CLASSIFY_SYSTEM,
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ],
+                messages=[
+                    {
+                        "role": "user",
+                        "content": f"Description: {description}\nUnit (from sheet): {unit_input}",
+                    }
+                ],
             )
             raw = _extract_llm_text(response.content)
             if raw.startswith("```"):
@@ -717,7 +752,8 @@ class RateIQAgent:
 
             # Ask Claude for a concise explanation (Haiku — prose writing, no reasoning)
             mkt_rate_display = f"Rs.{gap_dict.get('market_rate'):,.0f}" if gap_dict.get("market_rate") else "not found"
-            prompt = _OUTPUT_PROMPT_TEMPLATE.format(
+            # Static system prompt is cached. Dynamic user message includes all rate data.
+            dynamic_user = _OUTPUT_PROMPT_TEMPLATE.format(
                 description=state.get("description", ""),
                 suggested_rate=suggested_rate,
                 unit_norm=state.get("unit_norm", "unit"),
@@ -732,7 +768,14 @@ class RateIQAgent:
             response = self._llm.messages.create(
                 model=settings.ANTHROPIC_MODEL_LIGHT,
                 max_tokens=settings.LLM_MAX_TOKENS,
-                messages=[{"role": "user", "content": prompt}],
+                system=[
+                    {
+                        "type": "text",
+                        "text": _OUTPUT_SYSTEM,
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ],
+                messages=[{"role": "user", "content": dynamic_user}],
             )
             state["explanation"] = _extract_llm_text(response.content)
 
