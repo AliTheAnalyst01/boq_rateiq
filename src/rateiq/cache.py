@@ -15,12 +15,25 @@ from .models import MarketRate
 
 logger = logging.getLogger(__name__)
 
-_redis_client = None
+__all__ = ["get_market_rate", "set_market_rate"]
+
+# Sentinel: distinguishes "never tried" (None) from "tried and failed" (_UNAVAILABLE).
+# Without this, every call retries the TCP connect when Redis is down — 100+ timeout
+# waits per 50-row batch at 2s each = 200s overhead.
+_UNAVAILABLE = object()
+_redis_client = None  # None = not yet tried; _UNAVAILABLE = tried and failed
 
 
 def _get_client():
-    """Lazy singleton Redis client. Returns None if connection fails."""
+    """
+    Lazy singleton Redis client.
+    Returns the connected client, or None if Redis is unavailable.
+    On first connection failure, permanently disables Redis for this process
+    (sets sentinel) so subsequent calls return immediately without retrying.
+    """
     global _redis_client
+    if _redis_client is _UNAVAILABLE:
+        return None
     if _redis_client is not None:
         return _redis_client
     try:
@@ -31,7 +44,8 @@ def _get_client():
         logger.info("Redis cache connected: %s", settings.REDIS_URL)
         return _redis_client
     except Exception as exc:
-        logger.warning("Redis unavailable, cache disabled: %s", exc)
+        logger.warning("Redis unavailable, cache disabled for this session: %s", exc)
+        _redis_client = _UNAVAILABLE
         return None
 
 
@@ -84,7 +98,7 @@ def get_market_rate(cache_key: str) -> MarketRate | None:
         if raw is None:
             return None
         data = json.loads(raw)
-        logger.info("Redis cache HIT: %s", cache_key)
+        logger.debug("Redis cache HIT: %s", cache_key)
         return _dict_to_market_rate(data)
     except Exception as exc:
         logger.warning("Redis get_market_rate error (ignored): %s", exc)
