@@ -88,6 +88,10 @@ class Settings:
     # ── Market search ──────────────────────────────────────────────────────
     CONTRACTOR_MARKUP: float = 1.5  # multiply material-only price
 
+    # ── Redis ──────────────────────────────────────────────────────────────
+    REDIS_URL: str = "redis://localhost:6379"
+    REDIS_MARKET_TTL: int = 604800  # 7 days in seconds
+
 
 # ── Singleton ──────────────────────────────────────────────────────────────
 settings = Settings()
@@ -97,6 +101,8 @@ if os.getenv("QDRANT_URL"):
     settings.QDRANT_URL = os.getenv("QDRANT_URL")
 if os.getenv("POSTGRES_URL"):
     settings.POSTGRES_URL = os.getenv("POSTGRES_URL")
+if os.getenv("REDIS_URL"):
+    settings.REDIS_URL = os.getenv("REDIS_URL")
 
 # ── API Keys (loaded from .env) ────────────────────────────────────────────
 OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
