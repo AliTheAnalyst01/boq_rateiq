@@ -124,3 +124,4 @@ def set_market_rate(cache_key: str, rate: MarketRate) -> None:
         logger.debug("Redis cache SET: %s (TTL=%ds)", cache_key, settings.REDIS_MARKET_TTL)
     except Exception as exc:
         logger.warning("Redis set_market_rate error (ignored): %s", exc)
+
