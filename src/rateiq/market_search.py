@@ -527,7 +527,8 @@ def search_market_rate(
         return result
 
     # Attempt 2: broad query without site restrictions
-    query2 = f"{keywords} price rate PKR Pakistan 2025 Lahore contractor supply install"
+    _year = datetime.date.today().year
+    query2 = f"{keywords} price rate PKR Pakistan {_year} Lahore contractor supply install"
     result = _run_tavily_and_extract(query2, keywords, unit, category)
     if result.contractor_rate is not None:
         _market_cache[key] = result

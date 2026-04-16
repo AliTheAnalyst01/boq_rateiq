@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import tempfile
@@ -55,7 +55,7 @@ MAX_EMPTY_ROWS = 50
 
 
 @app.post("/fill-boq")
-async def fill_boq(file: UploadFile = File(...)):
+async def fill_boq(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     """
     INPUT:  Excel file (.xlsx) uploaded via multipart form
             File must have columns: DESCRIPTION, QTY, UNIT
@@ -127,10 +127,12 @@ async def fill_boq(file: UploadFile = File(...)):
         if not tmp_output.exists():
             raise HTTPException(500, "Processing failed — no output file.")
 
+        background_tasks.add_task(tmp_output.unlink, missing_ok=True)
         return FileResponse(
             path=str(tmp_output),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             filename=f"rateiq_filled_{file.filename}",
+            background=background_tasks,
             headers={
                 "X-Rows-Total": str(result.get("total_rows", 0)),
                 "X-Rows-Filled": str(result.get("filled", 0)),
@@ -146,6 +148,7 @@ async def fill_boq(file: UploadFile = File(...)):
     finally:
         if tmp_input.exists():
             tmp_input.unlink()
+        # tmp_output cleaned up via background_tasks after FileResponse is sent
 
 
 @app.post("/rate-item")
