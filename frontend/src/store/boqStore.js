@@ -8,8 +8,10 @@ export const useBoqStore = create((set, get) => ({
   jobId: null,
   uploadError: null,
   processing: false,
-  
+
   boqData: null,
+  downloadBlob: null,
+  downloadFileName: null,
   activeCategory: null,
   
   historicalModal: {
@@ -24,7 +26,7 @@ export const useBoqStore = create((set, get) => ({
     try {
       const response = await boqApi.uploadFile(file)
       const blob = response.data
-      
+
       const rows = await parseExcelData(blob)
       
       const enrichedRows = rows.filter(row => row.SUGGESTED_RATE)
@@ -44,10 +46,12 @@ export const useBoqStore = create((set, get) => ({
         originalFileName: file.name
       }
       
-      set({ 
-        uploadStatus: 'complete', 
-        boqData, 
-        processing: false 
+      set({
+        uploadStatus: 'complete',
+        boqData,
+        downloadBlob: blob,
+        downloadFileName: `rateiq_filled_${file.name}`,
+        processing: false,
       })
       toast.success('Your BOQ is ready!')
       return boqData
@@ -66,6 +70,8 @@ export const useBoqStore = create((set, get) => ({
       uploadError: null,
       processing: false,
       boqData: null,
+      downloadBlob: null,
+      downloadFileName: null,
       activeCategory: null,
       historicalModal: {
         isOpen: false,

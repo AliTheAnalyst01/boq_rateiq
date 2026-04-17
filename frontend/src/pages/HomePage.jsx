@@ -2,7 +2,31 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { UploadZone } from '../components/UploadZone'
 import { useBoqStore } from '../store/boqStore'
-import { FileText, Cpu, BarChart3 } from 'lucide-react'
+
+const steps = [
+  {
+    number: '01',
+    title: 'Upload Your BOQ',
+    body: 'Upload any Excel file with Description, Qty, and Unit columns. Empty rate cells are filled automatically.',
+  },
+  {
+    number: '02',
+    title: 'AI Finds Rates',
+    body: 'We check 1,429 past construction projects and live market prices to suggest a rate for every item.',
+  },
+  {
+    number: '03',
+    title: 'Review & Download',
+    body: 'See each suggested rate with a confidence level and explanation. Download the filled Excel instantly.',
+  },
+]
+
+const stats = [
+  { value: '1,429', label: 'Historical BOQ items' },
+  { value: '7', label: 'Construction categories' },
+  { value: '±15%', label: 'Target accuracy' },
+  { value: 'PKR', label: 'Pakistani Rupees' },
+]
 
 export function HomePage() {
   const navigate = useNavigate()
@@ -20,73 +44,145 @@ export function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto px-6 py-16">
-        <div className="text-center mb-12">
-          <h1 className="text-3xl font-bold text-gray-900 mb-3">
-            Upload your BOQ. Get rates in minutes.
-          </h1>
-          <p className="text-gray-600 text-lg">
-            Smart rate suggestions powered by historical project data and market research
-          </p>
-        </div>
+    <div className="min-h-screen flex flex-col" style={{ background: 'var(--color-bg)' }}>
 
-        <div className="mb-8">
-          <UploadZone 
-            onFileSelect={setSelectedFile} 
-            disabled={processing}
-          />
+      {/* ── Header ─────────────────────────────────────── */}
+      <header style={{ background: 'var(--color-header)' }} className="px-8 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div
+            className="w-8 h-8 rounded flex items-center justify-center text-white font-bold text-sm"
+            style={{ background: 'var(--color-gold)' }}
+          >
+            R
+          </div>
+          <span className="text-white font-semibold tracking-wide text-sm">BOQ RateIQ</span>
         </div>
+        <span className="text-xs px-2 py-1 rounded-full text-white/50 border border-white/10">
+          v1.0
+        </span>
+      </header>
 
-        {selectedFile && (
-          <div className="text-center">
-            <button
-              onClick={handleAnalyze}
-              disabled={processing}
-              className="px-8 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+      {/* ── Hero ───────────────────────────────────────── */}
+      <main className="flex-1">
+        <section className="max-w-3xl mx-auto px-6 pt-16 pb-8 text-center">
+          <div className="animate-fade-up">
+            <span
+              className="inline-block text-xs font-semibold uppercase tracking-widest px-3 py-1 rounded-full mb-6"
+              style={{ background: 'var(--color-gold-bg)', color: 'var(--color-gold)' }}
             >
-              {processing ? 'Processing...' : 'Analyze My BOQ'}
-            </button>
-            {uploadError && (
-              <p className="mt-3 text-red-600">{uploadError}</p>
+              Construction Cost Intelligence
+            </span>
+            <h1 className="font-display text-5xl leading-tight text-stone-900 mb-5">
+              Your BOQ.<br />Priced in minutes.
+            </h1>
+            <p className="text-stone-500 text-lg leading-relaxed max-w-xl mx-auto mb-10">
+              Upload your Bill of Quantities Excel file. Our AI checks past construction
+              projects and current market prices to suggest a rate for every line item —
+              with a clear confidence level and source.
+            </p>
+          </div>
+
+          {/* ── Upload card ────────────────────────────── */}
+          <div
+            className="animate-fade-up-1 rounded-2xl shadow-sm border p-8 mb-4"
+            style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)' }}
+          >
+            <UploadZone onFileSelect={setSelectedFile} disabled={processing} />
+
+            {selectedFile && (
+              <div className="mt-6">
+                <button
+                  onClick={handleAnalyze}
+                  disabled={processing}
+                  className="w-full py-4 rounded-xl font-semibold text-white text-base transition-all active:scale-98 disabled:opacity-60 disabled:cursor-not-allowed"
+                  style={{ background: processing ? '#92400e' : 'var(--color-gold)' }}
+                >
+                  {processing ? (
+                    <span className="flex items-center justify-center gap-3">
+                      <svg className="animate-spin-slow w-5 h-5 text-white/70" viewBox="0 0 24 24" fill="none">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="40 20" />
+                      </svg>
+                      Analyzing your BOQ — this takes 1–2 minutes…
+                    </span>
+                  ) : (
+                    'Analyze My BOQ →'
+                  )}
+                </button>
+
+                {processing && (
+                  <div className="mt-4">
+                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
+                      <div className="h-full rounded-full progress-bar-fill" style={{ background: 'var(--color-gold)' }} />
+                    </div>
+                    <p className="text-xs text-stone-400 mt-2 text-center">
+                      Checking historical database and live market prices…
+                    </p>
+                  </div>
+                )}
+
+                {uploadError && (
+                  <p className="mt-3 text-sm text-red-600 text-center">{uploadError}</p>
+                )}
+              </div>
             )}
           </div>
-        )}
 
-        <div className="mt-16 flex justify-center gap-12">
-          <div className="flex flex-col items-center text-center">
-            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-3">
-              <FileText className="w-6 h-6 text-blue-600" />
-            </div>
-            <p className="font-medium text-gray-800">Upload Your File</p>
-            <p className="text-sm text-gray-500 mt-1">Upload your BOQ Excel file</p>
-          </div>
-          
-          <div className="flex items-center pt-6">
-            <div className="w-8 h-px bg-gray-300" />
-          </div>
+          <p className="text-xs text-stone-400 animate-fade-up-2">
+            Accepts <strong>.xlsx</strong> files up to 10 MB · Max 50 items per upload · Rates in PKR
+          </p>
+        </section>
 
-          <div className="flex flex-col items-center text-center">
-            <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mb-3">
-              <Cpu className="w-6 h-6 text-purple-600" />
-            </div>
-            <p className="font-medium text-gray-800">AI Finds Rates</p>
-            <p className="text-sm text-gray-500 mt-1">Checks market prices and past projects</p>
+        {/* ── How it works ───────────────────────────── */}
+        <section className="max-w-4xl mx-auto px-6 py-14">
+          <h2
+            className="text-center font-display text-2xl text-stone-800 mb-10"
+          >
+            How it works
+          </h2>
+          <div className="grid md:grid-cols-3 gap-6">
+            {steps.map((step, i) => (
+              <div
+                key={step.number}
+                className="rounded-xl p-6 border"
+                style={{
+                  background: 'var(--color-card)',
+                  borderColor: 'var(--color-border)',
+                  animationDelay: `${i * 0.1}s`,
+                }}
+              >
+                <div
+                  className="font-rate text-3xl font-medium mb-4"
+                  style={{ color: 'var(--color-gold)' }}
+                >
+                  {step.number}
+                </div>
+                <h3 className="font-semibold text-stone-900 mb-2">{step.title}</h3>
+                <p className="text-sm text-stone-500 leading-relaxed">{step.body}</p>
+              </div>
+            ))}
           </div>
+        </section>
 
-          <div className="flex items-center pt-6">
-            <div className="w-8 h-px bg-gray-300" />
+        {/* ── Stats bar ──────────────────────────────── */}
+        <section
+          className="border-t border-b"
+          style={{ background: 'var(--color-card)', borderColor: 'var(--color-border)' }}
+        >
+          <div className="max-w-4xl mx-auto px-6 py-6 grid grid-cols-2 md:grid-cols-4 gap-6">
+            {stats.map((s) => (
+              <div key={s.label} className="text-center">
+                <p className="font-rate text-2xl font-medium text-stone-800">{s.value}</p>
+                <p className="text-xs text-stone-400 mt-1">{s.label}</p>
+              </div>
+            ))}
           </div>
+        </section>
+      </main>
 
-          <div className="flex flex-col items-center text-center">
-            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-3">
-              <BarChart3 className="w-6 h-6 text-green-600" />
-            </div>
-            <p className="font-medium text-gray-800">View & Download</p>
-            <p className="text-sm text-gray-500 mt-1">See suggested rates and download report</p>
-          </div>
-        </div>
-      </div>
+      {/* ── Footer ─────────────────────────────────────── */}
+      <footer className="px-8 py-5 text-center text-xs text-stone-400">
+        BOQ RateIQ · Rates are suggestions only · Always verify before submitting a tender
+      </footer>
     </div>
   )
 }

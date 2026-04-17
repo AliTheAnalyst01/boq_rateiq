@@ -1,7 +1,93 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600&family=DM+Mono:wght@400;500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+  --color-bg: #f5f3ee;
+  --color-card: #ffffff;
+  --color-ink: #1c1917;
+  --color-ink-2: #57534e;
+  --color-border: #e5e0d8;
+  --color-gold: #b45309;
+  --color-gold-bg: #fef3c7;
+  --color-rate: #15803d;
+  --color-header: #111827;
+}
+
+* { box-sizing: border-box; }
+
 body {
-  @apply bg-gray-50 text-gray-700;
+  font-family: var(--font-body);
+  background-color: var(--color-bg);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-display { font-family: var(--font-display); }
+.font-rate     { font-family: var(--font-mono); }
+
+/* ── Animations ──────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position: 600px 0; }
+}
+
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes progress-fill {
+  from { width: 0%; }
+  to   { width: 80%; }
+}
+
+.animate-fade-up   { animation: fadeUp 0.4s ease both; }
+.animate-fade-up-1 { animation: fadeUp 0.4s ease 0.08s both; }
+.animate-fade-up-2 { animation: fadeUp 0.4s ease 0.16s both; }
+.animate-fade-up-3 { animation: fadeUp 0.4s ease 0.24s both; }
+.animate-fade-in   { animation: fadeIn 0.3s ease both; }
+.animate-spin-slow { animation: spin-slow 1.6s linear infinite; }
+
+/* Processing progress bar */
+.progress-bar-fill {
+  animation: progress-fill 12s cubic-bezier(0.1, 0.4, 0.7, 1) forwards;
+}
+
+/* Shimmer skeleton */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-border) 25%,
+    #ede8df 50%,
+    var(--color-border) 75%
+  );
+  background-size: 600px 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+/* ── Custom scrollbar ─────────────────────────────────── */
+::-webkit-scrollbar       { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #c8c0b4; border-radius: 99px; }
+
+/* ── Upload drag state ────────────────────────────────── */
+.drop-zone-active {
+  border-color: var(--color-gold) !important;
+  background-color: var(--color-gold-bg) !important;
 }
