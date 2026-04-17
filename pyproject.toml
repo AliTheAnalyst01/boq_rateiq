@@ -27,6 +27,7 @@ dependencies = [
     "tqdm>=4.67.3",
     "xlrd>=2.0.2",
     "fastapi>=0.115.0",
+    "python-multipart>=0.0.9",
     "uvicorn>=0.34.0",
 ]
 
