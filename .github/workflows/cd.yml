@@ -47,7 +47,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: Dockerfile.api
+          file: docker/Dockerfile.api
           push: true
           tags: |
             ${{ secrets.ACR_LOGIN_SERVER }}/rateiq-api:${{ github.sha }}

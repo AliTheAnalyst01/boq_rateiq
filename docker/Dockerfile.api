@@ -1,0 +1,55 @@
+# ══════════════════════════════════════════════════════════
+# Stage 1: builder — installs all Python dependencies
+# This stage is messy (compilers, build tools) but temporary.
+# ══════════════════════════════════════════════════════════
+FROM python:3.11-slim AS builder
+
+WORKDIR /app
+
+# Install uv — the fast Python package manager this project uses
+RUN pip install uv --no-cache-dir
+
+# Copy dependency files first (before source code)
+# WHY: Docker caches each step. If only source code changes (not deps),
+# Docker reuses the cached dep install step — much faster rebuilds.
+COPY pyproject.toml uv.lock ./
+
+# Install all production dependencies into /app/.venv
+# --frozen: use exact versions from uv.lock (reproducible builds)
+# --no-dev:  skip test/dev tools (pytest etc.) — not needed in production
+RUN uv sync --frozen --no-dev
+
+# Pre-download the cross-encoder model used by the reranker
+# WHY: Without this, the first API request downloads ~80MB. With this,
+# the model is baked into the image and cold starts are fast.
+RUN .venv/bin/python -c "from sentence_transformers import CrossEncoder; CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')"
+
+
+# ══════════════════════════════════════════════════════════
+# Stage 2: runtime — clean image with only what's needed
+# Starts fresh from python:3.11-slim, no compilers or build tools.
+# ══════════════════════════════════════════════════════════
+FROM python:3.11-slim AS runtime
+
+WORKDIR /app
+
+# Copy the installed virtual environment from the builder stage
+COPY --from=builder /app/.venv /app/.venv
+# Copy the pre-downloaded model from builder
+COPY --from=builder /root/.cache /root/.cache
+
+# Put the venv's bin directory first in PATH so 'python' and 'uvicorn'
+# resolve to the venv versions, not the system Python
+ENV PATH="/app/.venv/bin:$PATH"
+
+# Copy application source code
+COPY src/ ./src/
+
+# Copy the BM25 data file — needed at startup to build the BM25 index
+COPY data/processed/boq_chunks.csv ./data/processed/boq_chunks.csv
+
+# Tell Docker (and Azure) that this container listens on port 8000
+EXPOSE 8000
+
+# The command that runs when the container starts.
+CMD ["uvicorn", "rateiq.api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
