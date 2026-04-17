@@ -3,6 +3,9 @@ targetScope = 'resourceGroup'
 @description('Azure region — defaults to the resource group region')
 param location string = resourceGroup().location
 
+@description('Region for PostgreSQL — eastus restricts this SKU; use eastus2 or centralus')
+param pgLocation string = 'eastus2'
+
 @description('Azure Container Registry name (globally unique, alphanumeric only)')
 param acrName string
 
@@ -60,7 +63,7 @@ module kv 'modules/keyVault.bicep' = {
 module postgres 'modules/postgres.bicep' = {
   name: 'postgres-deployment'
   params: {
-    location: location
+    location: pgLocation
     serverName: pgServerName
     adminUser: pgAdminUser
     adminPassword: pgAdminPassword
