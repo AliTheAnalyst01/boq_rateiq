@@ -1,0 +1,36 @@
+# Virtual environment — huge, not needed (we install inside Docker)
+.venv/
+
+# Tests — not needed in production image
+tests/
+notebooks/
+
+# Frontend — built separately, not part of API image
+frontend/
+
+# Infrastructure files — not needed in image
+infra/
+docs/
+.github/
+
+# Secrets — NEVER in image
+.env
+.env.*
+
+# Git history — not needed
+.git/
+.gitignore
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Local data (raw client files)
+data/raw/
+data/embeddings/
+
+# Editor files
+.vscode/
+.idea/
+*.swp
