@@ -21,11 +21,8 @@ param acrPassword string
 @description('Docker image tag to deploy (use git SHA for traceability)')
 param imageTag string = 'latest'
 
-@description('PostgreSQL server FQDN (from postgres module output)')
-param postgresFqdn string
-
 @description('PostgreSQL admin username')
-param postgresUser string
+param postgresUser string = 'rateiq'
 
 @secure()
 @description('PostgreSQL admin password')
@@ -57,7 +54,7 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
 }
 
 resource storage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
-  name: 'stqdrant${uniqueString(resourceGroup().id)}'
+  name: 'strateiq${uniqueString(resourceGroup().id)}'
   location: location
   sku: { name: 'Standard_LRS' }
   kind: 'StorageV2'
@@ -72,12 +69,16 @@ resource fileService 'Microsoft.Storage/storageAccounts/fileServices@2023-01-01'
   name: 'default'
 }
 
-resource fileShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-01-01' = {
+resource qdrantShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-01-01' = {
   parent: fileService
   name: 'qdrant-storage'
-  properties: {
-    shareQuota: 10
-  }
+  properties: { shareQuota: 10 }
+}
+
+resource postgresShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-01-01' = {
+  parent: fileService
+  name: 'postgres-data'
+  properties: { shareQuota: 10 }
 }
 
 resource cae 'Microsoft.App/managedEnvironments@2024-03-01' = {
@@ -94,17 +95,86 @@ resource cae 'Microsoft.App/managedEnvironments@2024-03-01' = {
   }
 }
 
-resource caeStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
+resource caeQdrantStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
   parent: cae
   name: 'qdrant-files'
   properties: {
     azureFile: {
       accountName: storage.name
       accountKey: storage.listKeys().keys[0].value
-      shareName: fileShare.name
+      shareName: qdrantShare.name
       accessMode: 'ReadWrite'
     }
   }
+}
+
+resource caePostgresStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
+  parent: cae
+  name: 'postgres-files'
+  properties: {
+    azureFile: {
+      accountName: storage.name
+      accountKey: storage.listKeys().keys[0].value
+      shareName: postgresShare.name
+      accessMode: 'ReadWrite'
+    }
+  }
+}
+
+resource postgresApp 'Microsoft.App/containerApps@2024-03-01' = {
+  name: 'rateiq-postgres'
+  location: location
+  properties: {
+    environmentId: cae.id
+    configuration: {
+      // TCP ingress — PostgreSQL is a TCP protocol, not HTTP.
+      // Internal DNS: rateiq-postgres:5432 resolves within the CAE environment.
+      ingress: {
+        external: false
+        targetPort: 5432
+        transport: 'tcp'
+      }
+      secrets: [
+        { name: 'pg-password', value: postgresPassword }
+      ]
+    }
+    template: {
+      containers: [
+        {
+          name: 'postgres'
+          image: 'postgres:15'
+          resources: {
+            cpu: json('0.5')
+            memory: '1Gi'
+          }
+          env: [
+            { name: 'POSTGRES_DB',       value: postgresDatabaseName }
+            { name: 'POSTGRES_USER',     value: postgresUser }
+            { name: 'POSTGRES_PASSWORD', secretRef: 'pg-password' }
+            { name: 'PGDATA',            value: '/var/lib/postgresql/data/pgdata' }
+          ]
+          volumeMounts: [
+            {
+              volumeName: 'postgres-data'
+              mountPath: '/var/lib/postgresql/data'
+            }
+          ]
+        }
+      ]
+      volumes: [
+        {
+          name: 'postgres-data'
+          storageType: 'AzureFile'
+          storageName: 'postgres-files'
+        }
+      ]
+      scale: {
+        minReplicas: 1  // PostgreSQL is stateful — must not scale to zero
+        maxReplicas: 1
+      }
+    }
+  }
+  dependsOn: [caePostgresStorage]
 }
 
 resource qdrantApp 'Microsoft.App/containerApps@2024-03-01' = {
@@ -149,7 +219,7 @@ resource qdrantApp 'Microsoft.App/containerApps@2024-03-01' = {
       }
     }
   }
-  dependsOn: [caeStorage]
+  dependsOn: [caeQdrantStorage]
 }
 
 resource redisApp 'Microsoft.App/containerApps@2024-03-01' = {
@@ -212,7 +282,8 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
         { name: 'anthropic-key',          value: anthropicApiKey }
         { name: 'tavily-key',             value: tavilyApiKey }
         { name: 'openai-key',             value: openaiApiKey }
-        { name: 'postgres-password-url',  value: 'postgresql://${postgresUser}:${postgresPassword}@${postgresFqdn}/${postgresDatabaseName}?sslmode=require' }
+        // sslmode=disable: internal container-to-container traffic within the CAE — TLS not needed
+        { name: 'postgres-url',           value: 'postgresql://${postgresUser}:${postgresPassword}@rateiq-postgres:5432/${postgresDatabaseName}?sslmode=disable' }
       ]
     }
     template: {
@@ -227,7 +298,7 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
           env: [
             { name: 'QDRANT_URL',         value: 'http://rateiq-qdrant' }
             { name: 'REDIS_URL',          value: 'redis://rateiq-redis:6379' }
-            { name: 'POSTGRES_URL',       secretRef: 'postgres-password-url' }
+            { name: 'POSTGRES_URL',       secretRef: 'postgres-url' }
             { name: 'ANTHROPIC_API_KEY',  secretRef: 'anthropic-key' }
             { name: 'TAVILY_API_KEY',     secretRef: 'tavily-key' }
             { name: 'OPENAI_API_KEY',     secretRef: 'openai-key' }
@@ -241,7 +312,7 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
       }
     }
   }
-  dependsOn: [qdrantApp, redisApp]
+  dependsOn: [postgresApp, qdrantApp, redisApp]
 }
 
 output apiUrl string = 'https://${apiApp.properties.configuration.ingress.fqdn}'

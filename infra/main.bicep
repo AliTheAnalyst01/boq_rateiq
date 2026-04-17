@@ -3,20 +3,11 @@ targetScope = 'resourceGroup'
 @description('Azure region — defaults to the resource group region')
 param location string = resourceGroup().location
 
-@description('Region for PostgreSQL — eastus restricts this SKU; use eastus2 or centralus')
-param pgLocation string = 'eastus2'
-
 @description('Azure Container Registry name (globally unique, alphanumeric only)')
 param acrName string
 
 @description('Key Vault name (globally unique, 3-24 chars)')
 param keyVaultName string
-
-@description('PostgreSQL server name (globally unique)')
-param pgServerName string
-
-@description('PostgreSQL admin username')
-param pgAdminUser string = 'rateiq'
 
 @description('Container Apps Environment name')
 param environmentName string
@@ -26,6 +17,9 @@ param apiAppName string = 'rateiq-api'
 
 @description('Docker image tag to deploy')
 param imageTag string = 'latest'
+
+@description('PostgreSQL admin username')
+param pgAdminUser string = 'rateiq'
 
 @secure()
 @description('PostgreSQL admin password — min 8 chars, uppercase + lowercase + digit + special')
@@ -60,16 +54,6 @@ module kv 'modules/keyVault.bicep' = {
   }
 }
 
-module postgres 'modules/postgres.bicep' = {
-  name: 'postgres-deployment'
-  params: {
-    location: pgLocation
-    serverName: pgServerName
-    adminUser: pgAdminUser
-    adminPassword: pgAdminPassword
-  }
-}
-
 module apps 'modules/containerApps.bicep' = {
   name: 'containerapps-deployment'
   params: {
@@ -80,10 +64,8 @@ module apps 'modules/containerApps.bicep' = {
     acrUsername: registry.outputs.adminUsername
     acrPassword: registry.outputs.adminPassword
     imageTag: imageTag
-    postgresFqdn: postgres.outputs.serverFqdn
     postgresUser: pgAdminUser
     postgresPassword: pgAdminPassword
-    postgresDatabaseName: postgres.outputs.databaseName
     anthropicApiKey: anthropicApiKey
     tavilyApiKey: tavilyApiKey
     openaiApiKey: openaiApiKey
@@ -93,4 +75,3 @@ module apps 'modules/containerApps.bicep' = {
 output apiUrl string = apps.outputs.apiUrl
 output acrLoginServer string = registry.outputs.loginServer
 output keyVaultName string = kv.outputs.keyVaultName
-output pgServerFqdn string = postgres.outputs.serverFqdn
