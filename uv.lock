@@ -333,7 +333,7 @@ css = [
 [[package]]
 name = "boq-rateiq"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "anthropic" },
     { name = "fastapi" },
