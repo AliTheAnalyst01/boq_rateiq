@@ -158,6 +158,8 @@ resource redisApp 'Microsoft.App/containerApps@2024-03-01' = {
   properties: {
     environmentId: cae.id
     configuration: {
+      // TCP ingress required for non-HTTP services within the CAE environment.
+      // Redis uses TCP; internal DNS (rateiq-redis:6379) resolves within the same environment.
       ingress: {
         external: false
         targetPort: 6379
