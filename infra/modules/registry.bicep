@@ -4,7 +4,7 @@ param location string
 @description('Name of the registry — must be globally unique, alphanumeric only, 5-50 chars')
 param acrName string
 
-resource acr 'Microsoft.ContainerRegistry/registries@2023-01-01-preview' = {
+resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
   name: acrName
   location: location
   sku: {

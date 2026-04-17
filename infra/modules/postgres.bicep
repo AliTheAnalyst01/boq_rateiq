@@ -11,7 +11,7 @@ param adminUser string = 'rateiq'
 @description('Admin password — min 8 chars, must contain uppercase, lowercase, digit, special char')
 param adminPassword string
 
-resource pgServer 'Microsoft.DBforPostgreSQL/flexibleServers@2022-12-01' = {
+resource pgServer 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
   name: serverName
   location: location
   sku: {
@@ -39,7 +39,7 @@ resource pgServer 'Microsoft.DBforPostgreSQL/flexibleServers@2022-12-01' = {
   }
 }
 
-resource pgDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2022-12-01' = {
+resource pgDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-01' = {
   parent: pgServer
   name: 'rateiq'
   properties: {
@@ -48,7 +48,7 @@ resource pgDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2022-12
   }
 }
 
-resource pgFirewallAllowAzure 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2022-12-01' = {
+resource pgFirewallAllowAzure 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-08-01' = {
   parent: pgServer
   name: 'AllowAllAzureServices'
   properties: {

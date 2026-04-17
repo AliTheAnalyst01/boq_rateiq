@@ -25,15 +25,19 @@ param apiAppName string = 'rateiq-api'
 param imageTag string = 'latest'
 
 @secure()
+@description('PostgreSQL admin password — min 8 chars, uppercase + lowercase + digit + special')
 param pgAdminPassword string
 
 @secure()
+@description('Anthropic API key (sk-ant-...)')
 param anthropicApiKey string
 
 @secure()
+@description('Tavily search API key (tvly-...)')
 param tavilyApiKey string
 
 @secure()
+@description('OpenAI API key (sk-proj-...)')
 param openaiApiKey string
 
 

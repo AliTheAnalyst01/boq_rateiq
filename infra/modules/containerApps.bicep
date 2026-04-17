@@ -178,7 +178,7 @@ resource redisApp 'Microsoft.App/containerApps@2024-03-01' = {
         }
       ]
       scale: {
-        minReplicas: 0
+        minReplicas: 1  // Redis is stateful — scale-to-zero loses in-memory data and causes cold-start delay
         maxReplicas: 1
       }
     }
@@ -203,6 +203,10 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
           passwordSecretRef: 'acr-password'
         }
       ]
+      // NOTE: Secret values passed inline here are stored in ARM deployment history.
+      // Anyone with Microsoft.Resources/deployments/read on this resource group can read them.
+      // For enterprise/production: store secrets in Key Vault and reference via keyVaultUrl + managed identity.
+      // Acceptable for solo/small-team projects where the deployer controls resource group access.
       secrets: [
         { name: 'acr-password',          value: acrPassword }
         { name: 'anthropic-key',          value: anthropicApiKey }
