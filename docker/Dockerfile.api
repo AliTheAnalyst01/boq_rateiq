@@ -41,6 +41,8 @@ COPY --from=builder /root/.cache /root/.cache
 # Put the venv's bin directory first in PATH so 'python' and 'uvicorn'
 # resolve to the venv versions, not the system Python
 ENV PATH="/app/.venv/bin:$PATH"
+# src/ layout — tell Python where to find the rateiq package
+ENV PYTHONPATH="/app/src"
 
 # Copy application source code
 COPY src/ ./src/
