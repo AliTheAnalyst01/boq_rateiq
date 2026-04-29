@@ -12,7 +12,7 @@ RUN pip install uv --no-cache-dir
 # Copy dependency files first (before source code)
 # WHY: Docker caches each step. If only source code changes (not deps),
 # Docker reuses the cached dep install step — much faster rebuilds.
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock README.md ./
 
 # Install all production dependencies into /app/.venv
 # --frozen: use exact versions from uv.lock (reproducible builds)
