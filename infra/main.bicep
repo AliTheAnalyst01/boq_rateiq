@@ -44,11 +44,11 @@ param tavilyApiKey string
 param openaiApiKey string
 
 
-// Step 1 — ACR: stores Docker images
+// Step 1 — ACR: stores Docker images (stays in resource group region)
 module registry 'modules/registry.bicep' = {
   name: 'registry-deployment'
   params: {
-    location: caeLocation   // co-locate with CAE for fastest image pulls
+    location: location
     acrName: acrName
   }
 }
