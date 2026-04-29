@@ -1,8 +1,17 @@
-@description('Azure region')
-param location string
+// Deploys all 4 container apps into an EXISTING Container Apps Environment.
+// Storage volumes must already be registered on the CAE (via caeStorageReg module) before deploy.
 
-@description('Container Apps Environment name')
-param environmentName string
+@description('Region of the existing CAE — all container apps must match')
+param caeLocation string = 'eastus'
+
+@description('Full ARM resource ID of the existing Container Apps Environment')
+param existingEnvId string
+
+@description('CAE storage name for Qdrant (registered via caeStorageReg module)')
+param qdrantStorageName string
+
+@description('CAE storage name for PostgreSQL (registered via caeStorageReg module)')
+param postgresStorageName string
 
 @description('API Container App name')
 param apiAppName string = 'rateiq-api'
@@ -44,91 +53,13 @@ param tavilyApiKey string
 param openaiApiKey string
 
 
-resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
-  name: 'law-${environmentName}'
-  location: location
-  properties: {
-    sku: { name: 'PerGB2018' }
-    retentionInDays: 30
-  }
-}
-
-resource storage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
-  name: 'strateiq${uniqueString(resourceGroup().id)}'
-  location: location
-  sku: { name: 'Standard_LRS' }
-  kind: 'StorageV2'
-  properties: {
-    minimumTlsVersion: 'TLS1_2'
-    supportsHttpsTrafficOnly: true
-  }
-}
-
-resource fileService 'Microsoft.Storage/storageAccounts/fileServices@2023-01-01' = {
-  parent: storage
-  name: 'default'
-}
-
-resource qdrantShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-01-01' = {
-  parent: fileService
-  name: 'qdrant-storage'
-  properties: { shareQuota: 10 }
-}
-
-resource postgresShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-01-01' = {
-  parent: fileService
-  name: 'postgres-data'
-  properties: { shareQuota: 10 }
-}
-
-resource cae 'Microsoft.App/managedEnvironments@2024-03-01' = {
-  name: environmentName
-  location: location
-  properties: {
-    appLogsConfiguration: {
-      destination: 'log-analytics'
-      logAnalyticsConfiguration: {
-        customerId: logAnalytics.properties.customerId
-        sharedKey: logAnalytics.listKeys().primarySharedKey
-      }
-    }
-  }
-}
-
-resource caeQdrantStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
-  parent: cae
-  name: 'qdrant-files'
-  properties: {
-    azureFile: {
-      accountName: storage.name
-      accountKey: storage.listKeys().keys[0].value
-      shareName: qdrantShare.name
-      accessMode: 'ReadWrite'
-    }
-  }
-}
-
-resource caePostgresStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
-  parent: cae
-  name: 'postgres-files'
-  properties: {
-    azureFile: {
-      accountName: storage.name
-      accountKey: storage.listKeys().keys[0].value
-      shareName: postgresShare.name
-      accessMode: 'ReadWrite'
-    }
-  }
-}
-
 resource postgresApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: 'rateiq-postgres'
-  location: location
+  location: caeLocation
   properties: {
-    environmentId: cae.id
+    environmentId: existingEnvId
     configuration: {
-      // TCP ingress — PostgreSQL is a TCP protocol, not HTTP.
-      // Internal DNS: rateiq-postgres:5432 resolves within the CAE environment.
+      // TCP ingress — PostgreSQL uses TCP, not HTTP. Internal DNS: rateiq-postgres:5432
       ingress: {
         external: false
         targetPort: 5432
@@ -165,23 +96,22 @@ resource postgresApp 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'postgres-data'
           storageType: 'AzureFile'
-          storageName: 'postgres-files'
+          storageName: postgresStorageName
         }
       ]
       scale: {
-        minReplicas: 1  // PostgreSQL is stateful — must not scale to zero
+        minReplicas: 1
         maxReplicas: 1
       }
     }
   }
-  dependsOn: [caePostgresStorage]
 }
 
 resource qdrantApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: 'rateiq-qdrant'
-  location: location
+  location: caeLocation
   properties: {
-    environmentId: cae.id
+    environmentId: existingEnvId
     configuration: {
       ingress: {
         external: false
@@ -210,7 +140,7 @@ resource qdrantApp 'Microsoft.App/containerApps@2024-03-01' = {
         {
           name: 'qdrant-data'
           storageType: 'AzureFile'
-          storageName: 'qdrant-files'
+          storageName: qdrantStorageName
         }
       ]
       scale: {
@@ -219,17 +149,15 @@ resource qdrantApp 'Microsoft.App/containerApps@2024-03-01' = {
       }
     }
   }
-  dependsOn: [caeQdrantStorage]
 }
 
 resource redisApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: 'rateiq-redis'
-  location: location
+  location: caeLocation
   properties: {
-    environmentId: cae.id
+    environmentId: existingEnvId
     configuration: {
-      // TCP ingress required for non-HTTP services within the CAE environment.
-      // Redis uses TCP; internal DNS (rateiq-redis:6379) resolves within the same environment.
+      // TCP ingress — Redis uses TCP. Internal DNS: rateiq-redis:6379
       ingress: {
         external: false
         targetPort: 6379
@@ -248,7 +176,7 @@ resource redisApp 'Microsoft.App/containerApps@2024-03-01' = {
         }
       ]
       scale: {
-        minReplicas: 1  // Redis is stateful — scale-to-zero loses in-memory data and causes cold-start delay
+        minReplicas: 1
         maxReplicas: 1
       }
     }
@@ -257,9 +185,9 @@ resource redisApp 'Microsoft.App/containerApps@2024-03-01' = {
 
 resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: apiAppName
-  location: location
+  location: caeLocation
   properties: {
-    environmentId: cae.id
+    environmentId: existingEnvId
     configuration: {
       ingress: {
         external: true
@@ -273,17 +201,15 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
           passwordSecretRef: 'acr-password'
         }
       ]
-      // NOTE: Secret values passed inline here are stored in ARM deployment history.
-      // Anyone with Microsoft.Resources/deployments/read on this resource group can read them.
-      // For enterprise/production: store secrets in Key Vault and reference via keyVaultUrl + managed identity.
-      // Acceptable for solo/small-team projects where the deployer controls resource group access.
+      // NOTE: Secret values here are stored in ARM deployment history (solo project trade-off).
+      // Production path: Key Vault references + managed identity.
       secrets: [
-        { name: 'acr-password',          value: acrPassword }
-        { name: 'anthropic-key',          value: anthropicApiKey }
-        { name: 'tavily-key',             value: tavilyApiKey }
-        { name: 'openai-key',             value: openaiApiKey }
-        // sslmode=disable: internal container-to-container traffic within the CAE — TLS not needed
-        { name: 'postgres-url',           value: 'postgresql://${postgresUser}:${postgresPassword}@rateiq-postgres:5432/${postgresDatabaseName}?sslmode=disable' }
+        { name: 'acr-password',    value: acrPassword }
+        { name: 'anthropic-key',   value: anthropicApiKey }
+        { name: 'tavily-key',      value: tavilyApiKey }
+        { name: 'openai-key',      value: openaiApiKey }
+        // sslmode=disable: internal container-to-container traffic, no TLS needed
+        { name: 'postgres-url',    value: 'postgresql://${postgresUser}:${postgresPassword}@rateiq-postgres:5432/${postgresDatabaseName}?sslmode=disable' }
       ]
     }
     template: {
@@ -296,13 +222,13 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
             memory: '1Gi'
           }
           env: [
-            { name: 'QDRANT_URL',         value: 'http://rateiq-qdrant' }
-            { name: 'REDIS_URL',          value: 'redis://rateiq-redis:6379' }
-            { name: 'POSTGRES_URL',       secretRef: 'postgres-url' }
-            { name: 'ANTHROPIC_API_KEY',  secretRef: 'anthropic-key' }
-            { name: 'TAVILY_API_KEY',     secretRef: 'tavily-key' }
-            { name: 'OPENAI_API_KEY',     secretRef: 'openai-key' }
-            { name: 'ENVIRONMENT',        value: 'production' }
+            { name: 'QDRANT_URL',        value: 'http://rateiq-qdrant' }
+            { name: 'REDIS_URL',         value: 'redis://rateiq-redis:6379' }
+            { name: 'POSTGRES_URL',      secretRef: 'postgres-url' }
+            { name: 'ANTHROPIC_API_KEY', secretRef: 'anthropic-key' }
+            { name: 'TAVILY_API_KEY',    secretRef: 'tavily-key' }
+            { name: 'OPENAI_API_KEY',    secretRef: 'openai-key' }
+            { name: 'ENVIRONMENT',       value: 'production' }
           ]
         }
       ]
@@ -317,4 +243,3 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
 
 output apiUrl string = 'https://${apiApp.properties.configuration.ingress.fqdn}'
 output apiAppName string = apiApp.name
-output environmentName string = cae.name
