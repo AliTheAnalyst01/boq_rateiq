@@ -249,6 +249,89 @@ def insert_boq_item(chunk: BOQChunk) -> bool:
         return False
 
 
+def ensure_schema_and_seed(chunks_csv_path) -> int:
+    """
+    INPUT:  Path to boq_chunks.csv
+    OUTPUT: int — number of rows inserted (0 if table already had data)
+
+    Creates boq_items table if missing, then seeds from CSV if empty.
+    Called once at startup — safe to call on every cold start because
+    PostgreSQL uses ephemeral storage and loses data on container restart.
+    """
+    create_sql = """
+        CREATE TABLE IF NOT EXISTS boq_items (
+            id               SERIAL PRIMARY KEY,
+            chunk_id         TEXT UNIQUE NOT NULL,
+            description_short TEXT NOT NULL,
+            description_full  TEXT,
+            section_title     TEXT,
+            work_category     TEXT,
+            rate              NUMERIC,
+            unit_norm         TEXT,
+            qty               TEXT,
+            source_file       TEXT,
+            sheet_name        TEXT,
+            rate_per_unit_label TEXT,
+            embedding_text    TEXT
+        )
+    """
+    try:
+        engine = get_engine()
+        with engine.connect() as conn:
+            conn.execute(text(create_sql))
+            conn.commit()
+            count = conn.execute(text("SELECT COUNT(*) FROM boq_items")).scalar()
+
+        if count and count > 0:
+            logger.info("boq_items already has %d rows — skipping seed.", count)
+            return 0
+
+        logger.info("boq_items is empty — seeding from %s ...", chunks_csv_path)
+        import pandas as pd
+        df = pd.read_csv(chunks_csv_path)
+        inserted = 0
+        with engine.connect() as conn:
+            for _, row in df.iterrows():
+                try:
+                    conn.execute(text("""
+                        INSERT INTO boq_items (
+                            chunk_id, description_short, description_full,
+                            section_title, work_category, rate, unit_norm,
+                            qty, source_file, sheet_name,
+                            rate_per_unit_label, embedding_text
+                        ) VALUES (
+                            :chunk_id, :description_short, :description_full,
+                            :section_title, :work_category, :rate, :unit_norm,
+                            :qty, :source_file, :sheet_name,
+                            :rate_per_unit_label, :embedding_text
+                        ) ON CONFLICT (chunk_id) DO NOTHING
+                    """), {
+                        "chunk_id": str(row.get("chunk_id", "")),
+                        "description_short": str(row.get("description_short", "")),
+                        "description_full": str(row.get("description_full", "")),
+                        "section_title": str(row.get("section_title", "")),
+                        "work_category": str(row.get("work_category", "")),
+                        "rate": float(row["rate"]) if pd.notna(row.get("rate")) else None,
+                        "unit_norm": str(row.get("unit_norm", "")),
+                        "qty": str(row.get("qty", "")),
+                        "source_file": str(row.get("source_file", "")),
+                        "sheet_name": str(row.get("sheet_name", "")),
+                        "rate_per_unit_label": str(row.get("rate_per_unit_label", "")),
+                        "embedding_text": str(row.get("embedding_text", "")),
+                    })
+                    inserted += 1
+                except Exception as row_exc:
+                    logger.warning("Skipping row %s: %s", row.get("chunk_id"), row_exc)
+            conn.commit()
+
+        logger.info("Seeded %d rows into boq_items.", inserted)
+        return inserted
+
+    except Exception as exc:
+        logger.error("ensure_schema_and_seed failed: %s", exc)
+        return 0
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 

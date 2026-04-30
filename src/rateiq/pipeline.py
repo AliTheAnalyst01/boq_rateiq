@@ -52,6 +52,7 @@ from .logging_config import (
 )
 from .models import BOQChunk, RateRecommendation
 from .parser import find_header_row, load_all_chunks, normalize_columns
+from .postgres_store import ensure_schema_and_seed
 from .searcher import BOQSearcher
 
 logger = logging.getLogger(__name__)
@@ -650,6 +651,9 @@ def initialize_all(chunks_csv: Path = settings.CHUNKS_CSV) -> RateIQAgent:
         >>> output: RateIQAgent ready to call .run() on BOQ rows
     """
     try:
+        logger.info("Step 0/5: Initializing PostgreSQL schema and seeding data...")
+        ensure_schema_and_seed(chunks_csv)
+
         logger.info("Step 1/5: Loading chunks from %s ...", chunks_csv)
         chunks: list[BOQChunk] = load_all_chunks(chunks_csv)
         if not chunks:
