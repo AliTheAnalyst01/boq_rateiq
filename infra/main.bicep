@@ -88,7 +88,6 @@ module apps 'modules/containerApps.bicep' = {
     caeLocation: caeLocation
     existingEnvId: resourceId(existingEnvResourceGroup, 'Microsoft.App/managedEnvironments', existingEnvName)
     qdrantStorageName: caeStorage.outputs.qdrantStorageName
-    postgresStorageName: caeStorage.outputs.postgresStorageName
     apiAppName: apiAppName
     acrLoginServer: registry.outputs.loginServer
     acrUsername: registry.outputs.adminUsername

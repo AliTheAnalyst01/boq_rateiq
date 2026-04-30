@@ -1,5 +1,6 @@
 // Deploys all 4 container apps into an EXISTING Container Apps Environment.
-// Storage volumes must already be registered on the CAE (via caeStorageReg module) before deploy.
+// Qdrant uses Azure Files for vector persistence. PostgreSQL uses ephemeral storage
+// (Azure Files SMB does not support chmod, which PostgreSQL initdb requires).
 
 @description('Region of the existing CAE — all container apps must match')
 param caeLocation string = 'eastus'
@@ -9,9 +10,6 @@ param existingEnvId string
 
 @description('CAE storage name for Qdrant (registered via caeStorageReg module)')
 param qdrantStorageName string
-
-@description('CAE storage name for PostgreSQL (registered via caeStorageReg module)')
-param postgresStorageName string
 
 @description('API Container App name')
 param apiAppName string = 'rateiq-api'
@@ -82,21 +80,7 @@ resource postgresApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'POSTGRES_DB',       value: postgresDatabaseName }
             { name: 'POSTGRES_USER',     value: postgresUser }
             { name: 'POSTGRES_PASSWORD', secretRef: 'pg-password' }
-            { name: 'PGDATA',            value: '/var/lib/postgresql/data/pgdata' }
           ]
-          volumeMounts: [
-            {
-              volumeName: 'postgres-data'
-              mountPath: '/var/lib/postgresql/data'
-            }
-          ]
-        }
-      ]
-      volumes: [
-        {
-          name: 'postgres-data'
-          storageType: 'AzureFile'
-          storageName: postgresStorageName
         }
       ]
       scale: {
