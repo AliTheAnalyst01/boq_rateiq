@@ -193,7 +193,8 @@ resource apiApp 'Microsoft.App/containerApps@2024-03-01' = {
         { name: 'tavily-key',      value: tavilyApiKey }
         { name: 'openai-key',      value: openaiApiKey }
         // sslmode=disable: internal container-to-container traffic, no TLS needed
-        { name: 'postgres-url',    value: 'postgresql://${postgresUser}:${postgresPassword}@rateiq-postgres:5432/${postgresDatabaseName}?sslmode=disable' }
+        // replace('@','%40'): URL-encode @ in password to avoid host-parsing confusion
+        { name: 'postgres-url',    value: 'postgresql://${postgresUser}:${replace(postgresPassword, '@', '%40')}@rateiq-postgres:5432/${postgresDatabaseName}?sslmode=disable' }
       ]
     }
     template: {
